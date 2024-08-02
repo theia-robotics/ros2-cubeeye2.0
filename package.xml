@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>cubeeye_camera</name>
+  <version>1.0.2</version>
+  <description>The cubeeye_camera package</description>
+
+  <maintainer email="support@cube-eye.com">CubeEye</maintainer>  
+
+  <license>meerecompany</license>
+
+  <url type="website">http://wiki.ros.org/CubeEye</url>
+  <url type="bugtracker">https://github.com/cubeeye/ros-mtf</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>  
+  <depend>cv_bridge</depend>    
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
