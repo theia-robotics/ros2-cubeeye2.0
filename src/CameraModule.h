@@ -14,7 +14,7 @@ class ReceivedIntensityPCLFrameSink;
 class CameraModule
 {
 public:
-    CameraModule();
+    CameraModule(rclcpp::Node* node);
 
     // camera operations
     std::vector<std::string> scan();
@@ -25,15 +25,15 @@ public:
     void shutdown();
 
     // node connections
-    void connectTo(rclcpp::Node* node);
-    void disconnectFrom(rclcpp::Node* node);
+    void connectTo();
+    void disconnectFrom();
 
     int32_t getLastState() { return mLastState.load(std::memory_order_acquire); }
     int32_t getLastError() { return mLastError.load(std::memory_order_acquire); };
 
 private:
     void publishFrames(const meere::sensor::sptr_frame_list& frames);
-    void createPublishers(rclcpp::Node* node);
+    void createPublishers();
 
     void setLastState(int32_t state) { mLastState.store(state, std::memory_order_release); }
     void setLastError(int32_t error) { mLastError.store(error, std::memory_order_release); }
@@ -42,7 +42,8 @@ private:
     sensor_msgs::msg::PointCloud2::SharedPtr createPointCloudMessage(meere::sensor::FrameType type, int32_t width, int32_t height);
 
 private:
-    rclcpp::Logger mLogger;
+    rclcpp::Node* mNode;
+    std::string mFrameId;
 
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr mDepthImagePublisher;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr mAmplitudeImagePublisher;

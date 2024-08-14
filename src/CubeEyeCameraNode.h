@@ -11,11 +11,11 @@ public:
 
     void init();
     bool shutdown();
-    
+
 protected:
-    void getLastStateServiceCallback(const std::shared_ptr<cubeeye_camera::srv::LastState::Request> request, 
+    void getLastStateServiceCallback(const std::shared_ptr<cubeeye_camera::srv::LastState::Request> request,
                                     std::shared_ptr<cubeeye_camera::srv::LastState::Response> response);
-    void getLastErrorServiceCallback(const std::shared_ptr<cubeeye_camera::srv::LastError::Request> request, 
+    void getLastErrorServiceCallback(const std::shared_ptr<cubeeye_camera::srv::LastError::Request> request,
                                     std::shared_ptr<cubeeye_camera::srv::LastError::Response> response);
     void getScanServiceCallback(const std::shared_ptr<cubeeye_camera::srv::Scan::Request> request,
                                     std::shared_ptr<cubeeye_camera::srv::Scan::Response> response);
@@ -29,6 +29,8 @@ protected:
                                         std::shared_ptr<cubeeye_camera::srv::Disconnect::Response> response);
 
 private:
+    void connectOnInit(int index, bool enable_depth, bool enable_pointcloud);
+
     rclcpp::Logger mLogger;
 
     rclcpp::Service<cubeeye_camera::srv::LastState>::SharedPtr mLastStateService;
