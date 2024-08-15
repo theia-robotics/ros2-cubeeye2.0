@@ -21,7 +21,7 @@ class ReceivedIntensityPCLFrameSink : public meere::sensor::sink
  , public meere::sensor::prepared_listener
 {
 public:
-    ReceivedIntensityPCLFrameSink(CameraModule* node) : mNode(node) {}
+    ReceivedIntensityPCLFrameSink(CameraModule* camera) : camera(camera) {}
     virtual ~ReceivedIntensityPCLFrameSink() = default;
 
     virtual std::string name() const {
@@ -29,31 +29,32 @@ public:
     }
 
     virtual void onCubeEyeCameraState(const meere::sensor::ptr_source source, meere::sensor::CameraState state) {
-        RCLCPP_DEBUG(mNode->mLogger, "%s:%d source(%s) state = %d\n", __FUNCTION__, __LINE__, source->uri().c_str(), static_cast<int>(state));
-        mNode->setLastState((int32_t)state);
+        RCLCPP_DEBUG(camera->mNode->get_logger(), "%s:%d source(%s) state = %d\n", __FUNCTION__, __LINE__, source->uri().c_str(), static_cast<int>(state));
+        camera->setLastState((int32_t)state);
     }
 
     virtual void onCubeEyeCameraError(const meere::sensor::ptr_source source, meere::sensor::CameraError error) {
-        RCLCPP_DEBUG(mNode->mLogger, "%s:%d source(%s) error = %d\n", __FUNCTION__, __LINE__, source->uri().c_str(), static_cast<int>(error));
-        mNode->setLastError((int32_t)error);
+        RCLCPP_DEBUG(camera->mNode->get_logger(), "%s:%d source(%s) error = %d\n", __FUNCTION__, __LINE__, source->uri().c_str(), static_cast<int>(error));
+        camera->setLastError((int32_t)error);
     }
 
     virtual void onCubeEyeFrameList(const meere::sensor::ptr_source source , const meere::sensor::sptr_frame_list& frames) {
         UNUSED(source);
-        mNode->publishFrames(frames);
+        camera->publishFrames(frames);
     }
 
 public:
     virtual void onCubeEyeCameraPrepared(const meere::sensor::ptr_camera camera) {
-        RCLCPP_INFO(mNode->mLogger, "%s:%d source(%s)\n", __FUNCTION__, __LINE__, camera->source()->uri().c_str());
+        RCLCPP_INFO(this->camera->mNode->get_logger(), "%s:%d source(%s)\n", __FUNCTION__, __LINE__, camera->source()->uri().c_str());
     }
 
 public:
-    CameraModule* mNode;
+    CameraModule* camera;
 };
 
-CameraModule::CameraModule() : mLogger(rclcpp::get_logger("camera_module")), 
-        mSink(std::make_shared<ReceivedIntensityPCLFrameSink>(this)), 
+CameraModule::CameraModule(rclcpp::Node* node) :
+        mNode(node),
+        mSink(std::make_shared<ReceivedIntensityPCLFrameSink>(this)),
         mLastState(0), mLastError(0) {
 
 }
@@ -61,7 +62,7 @@ CameraModule::CameraModule() : mLogger(rclcpp::get_logger("camera_module")),
 std::vector<std::string> CameraModule::scan() {
     mSourceList = meere::sensor::search_camera_source();
     if (mSourceList == nullptr || mSourceList->size() == 0) {
-        RCLCPP_ERROR(mLogger, "no searched device!");
+        RCLCPP_ERROR(mNode->get_logger(), "no searched device!");
         return std::vector<std::string>();
     }
 
@@ -69,7 +70,7 @@ std::vector<std::string> CameraModule::scan() {
 
     int i = 0;
     for (auto it : (*mSourceList)) {
-        RCLCPP_INFO(mLogger, "%d) source name : %s, serialNumber : %s, uri : %s",
+        RCLCPP_INFO(mNode->get_logger(), "%d) source name : %s, serialNumber : %s, uri : %s",
             i++, it->name().c_str(), it->serialNumber().c_str(), it->uri().c_str());
 
         connections.push_back(it->uri());
@@ -80,12 +81,12 @@ std::vector<std::string> CameraModule::scan() {
 
 meere::sensor::result CameraModule::connect(int32_t index) {
     if (mSourceList == nullptr || mSourceList->size() == 0) {
-        RCLCPP_ERROR(mLogger, "source list is null");
+        RCLCPP_ERROR(mNode->get_logger(), "source list is null");
         return meere::sensor::result::fail;
     }
 
     if (index >= static_cast<int32_t>(mSourceList->size())) {
-        RCLCPP_ERROR(mLogger, "wrong source index");
+        RCLCPP_ERROR(mNode->get_logger(), "wrong source index");
         return meere::sensor::result::fail;
     }
 
@@ -94,7 +95,7 @@ meere::sensor::result CameraModule::connect(int32_t index) {
     // create camera
     mCamera = meere::sensor::create_camera(mSourceList->at(index));
     if (mCamera == nullptr) {
-        RCLCPP_ERROR(mLogger, "camera creation failed");
+        RCLCPP_ERROR(mNode->get_logger(), "camera creation failed");
         return meere::sensor::result::fail;
     }
 
@@ -104,25 +105,25 @@ meere::sensor::result CameraModule::connect(int32_t index) {
     _rt = mCamera->prepare();
     assert(meere::sensor::result::success == _rt);
     if (meere::sensor::result::success != _rt) {
-        RCLCPP_ERROR(mLogger, "mCamera->prepare() failed");
+        RCLCPP_ERROR(mNode->get_logger(), "mCamera->prepare() failed");
 
         meere::sensor::destroy_camera(mCamera);
         return meere::sensor::result::fail;
     }
-    RCLCPP_INFO(mLogger, "camera is connected");
+    RCLCPP_INFO(mNode->get_logger(), "camera is connected");
 
     return meere::sensor::result::success;
 }
 
 meere::sensor::result CameraModule::run(int32_t type) {
     if (mCamera == nullptr) {
-        RCLCPP_ERROR(mLogger, "camera is not created");
+        RCLCPP_ERROR(mNode->get_logger(), "camera is not created");
         return meere::sensor::result::fail;
     }
 
     meere::sensor::result _rt = mCamera->run(type);
     if (_rt != meere::sensor::result::success) {
-        RCLCPP_ERROR(mLogger, "mCamera->run() failed");
+        RCLCPP_ERROR(mNode->get_logger(), "mCamera->run() failed");
         return _rt;
     }
 
@@ -131,13 +132,13 @@ meere::sensor::result CameraModule::run(int32_t type) {
 
 meere::sensor::result CameraModule::stop() {
     if (mCamera == nullptr) {
-        RCLCPP_ERROR(mLogger, "camera is not created");
+        RCLCPP_ERROR(mNode->get_logger(), "camera is not created");
         return meere::sensor::result::fail;
     }
 
     meere::sensor::result _rt = mCamera->stop();
     if (_rt != meere::sensor::result::success) {
-        RCLCPP_ERROR(mLogger, "mCamera->stop() failed");
+        RCLCPP_ERROR(mNode->get_logger(), "mCamera->stop() failed");
         return _rt;
     }
 
@@ -146,7 +147,7 @@ meere::sensor::result CameraModule::stop() {
 
 meere::sensor::result CameraModule::disconnect() {
     if (mCamera == nullptr) {
-        RCLCPP_ERROR(mLogger, "camera is not created");
+        RCLCPP_ERROR(mNode->get_logger(), "camera is not created");
         return meere::sensor::result::fail;
     }
 
@@ -167,21 +168,27 @@ void CameraModule::shutdown() {
     }
 }
 
-void CameraModule::connectTo(rclcpp::Node* node) {
+void CameraModule::connectTo() {
+    mNode->declare_parameter("frame_id", "tof");
+    mFrameId = mNode->get_parameter("frame_id").as_string();
+
     // initialize model
-    RCLCPP_INFO(mLogger, "make model parameter (%s)", mCamera->source()->name().c_str());
+    RCLCPP_INFO(mNode->get_logger(), "make model parameter (%s)", mCamera->source()->name().c_str());
     mModelParams = ModelParameter::create(mCamera);
     if (mModelParams != nullptr) {
-        mModelParams->addTo(node);
+        mModelParams->addTo(mNode);
     }
 
     // create publisher
-    createPublishers(node);
+    createPublishers();
 }
 
-void CameraModule::disconnectFrom(rclcpp::Node* node) {
+void CameraModule::disconnectFrom() {
+    mNode->undeclare_parameter("frame_id");
+    mFrameId = "";
+
     if (mModelParams != nullptr) {
-        mModelParams->removeFrom(node);
+        mModelParams->removeFrom(mNode);
         mModelParams.reset();
     }
 }
@@ -233,7 +240,7 @@ void CameraModule::publishFrames(const meere::sensor::sptr_frame_list& frames)
 
             auto _sptr_frame = meere::sensor::frame_cast_basic8u(it);
 			auto _ptr_frame_data = _sptr_frame->frameData();
-            
+
             sensor_msgs::msg::Image::SharedPtr _msg = createImageMessage(it->frameType(),
                                                             _sptr_frame->frameWidth(), _sptr_frame->frameHeight());
             uint8_t* _data = reinterpret_cast<uint8_t*>(&_msg->data[0]);
@@ -300,40 +307,32 @@ void CameraModule::publishFrames(const meere::sensor::sptr_frame_list& frames)
                 mPointCloudPublisher->publish(*_pcl_msg);
             }
         }
-    }    
+    }
 }
 
-void CameraModule::createPublishers(rclcpp::Node* node)
+void CameraModule::createPublishers()
 {
     auto _qos = rclcpp::QoS(rclcpp::SystemDefaultsQoS());
 
-    mDepthImagePublisher = node->create_publisher<sensor_msgs::msg::Image>("/cubeeye/camera/depth", _qos);
-    mAmplitudeImagePublisher = node->create_publisher<sensor_msgs::msg::Image>("/cubeeye/camera/amplitude", _qos);
-    mRGBImagePublisher = node->create_publisher<sensor_msgs::msg::Image>("/cubeeye/camera/rgb", _qos);
-    mPointCloudPublisher = node->create_publisher<sensor_msgs::msg::PointCloud2>("/cubeeye/camera/points", _qos);
+    mDepthImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("depth", _qos);
+    mAmplitudeImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("amplitude", _qos);
+    mRGBImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("color", _qos);
+    mPointCloudPublisher = mNode->create_publisher<sensor_msgs::msg::PointCloud2>("cloud", _qos);
 }
 
-sensor_msgs::msg::Image::SharedPtr CameraModule::createImageMessage(meere::sensor::FrameType type, int32_t width, int32_t height) 
+sensor_msgs::msg::Image::SharedPtr CameraModule::createImageMessage(meere::sensor::FrameType type, int32_t width, int32_t height)
 {
     sensor_msgs::msg::Image::SharedPtr _imageMsg;
+
+    std_msgs::msg::Header header;
+    header.frame_id = mFrameId;
+    header.stamp = mNode->get_clock()->now();
 
     if (type == meere::sensor::FrameType::Depth
         || type == meere::sensor::FrameType::Amplitude
         || type == meere::sensor::FrameType::RegisteredDepth) {
-        _imageMsg = cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::TYPE_16UC1).toImageMsg();
 
-        switch (type) {
-        case meere::sensor::FrameType::Depth:
-        case meere::sensor::FrameType::RegisteredDepth:
-            _imageMsg->header.frame_id = "depth";
-            break;
-        case meere::sensor::FrameType::Amplitude:
-            _imageMsg->header.frame_id = "amplitude";
-            break;
-        default:
-            _imageMsg->header.frame_id = "depth";
-            break;
-        }
+        _imageMsg = cv_bridge::CvImage(header, sensor_msgs::image_encodings::TYPE_16UC1).toImageMsg();
 
         _imageMsg->width = width;
         _imageMsg->height = height;
@@ -344,9 +343,9 @@ sensor_msgs::msg::Image::SharedPtr CameraModule::createImageMessage(meere::senso
     }
     else if (type == meere::sensor::FrameType::RGB
         || type == meere::sensor::FrameType::RegisteredRGB) {
-        _imageMsg = cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::BGR8).toImageMsg();
 
-        _imageMsg->header.frame_id = "rgb";
+        _imageMsg = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8).toImageMsg();
+
         _imageMsg->width = width;
         _imageMsg->height = height;
         _imageMsg->is_bigendian = false;
@@ -358,12 +357,13 @@ sensor_msgs::msg::Image::SharedPtr CameraModule::createImageMessage(meere::senso
     return _imageMsg;
 }
 
-sensor_msgs::msg::PointCloud2::SharedPtr CameraModule::createPointCloudMessage(meere::sensor::FrameType type, int32_t width, int32_t height) 
+sensor_msgs::msg::PointCloud2::SharedPtr CameraModule::createPointCloudMessage(meere::sensor::FrameType type, int32_t width, int32_t height)
 {
     sensor_msgs::msg::PointCloud2::SharedPtr _pclMsg;
 
     _pclMsg = std::make_shared<sensor_msgs::msg::PointCloud2>();
-    _pclMsg->header.frame_id = "pcl";
+    _pclMsg->header.frame_id = mFrameId;
+    _pclMsg->header.stamp = mNode->get_clock()->now();
     _pclMsg->width = width;
     _pclMsg->height = height;
     _pclMsg->is_bigendian = false;

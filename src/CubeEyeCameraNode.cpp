@@ -1,6 +1,7 @@
 #include <sstream>
 #include <thread>
 #include <signal.h>
+#include <stdexcept>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/logger.hpp>
@@ -15,6 +16,7 @@
 #include <cv_bridge/cv_bridge.h>
 
 // service
+#if 0
 #include "cubeeye_camera/srv/last_state.hpp"
 #include "cubeeye_camera/srv/last_error.hpp"
 #include "cubeeye_camera/srv/scan.hpp"
@@ -22,42 +24,63 @@
 #include "cubeeye_camera/srv/run.hpp"
 #include "cubeeye_camera/srv/stop.hpp"
 #include "cubeeye_camera/srv/disconnect.hpp"
+#endif
 
 #include "ProjectDefines.h"
 #include "CameraModule.h"
 #include "CubeEyeCameraNode.h"
 
-CubeEyeCameraNode::CubeEyeCameraNode() : Node("cubeeye_camera_node"), 
-    mLogger(rclcpp::get_logger("camera_node")), mCamera(std::make_shared<CameraModule>())
+CubeEyeCameraNode::CubeEyeCameraNode(const rclcpp::NodeOptions& options) :
+    Node("cubeeye_camera_node", options),
+    mLogger(rclcpp::get_logger("camera_node")),
+    mCamera(std::make_shared<CameraModule>(this))
 {
+  init();
 }
 
 void CubeEyeCameraNode::init()
 {
+    declare_parameter("auto_connect", false);
+    declare_parameter("camera_index", 0);
+    declare_parameter("enable_depth", false);
+    declare_parameter("enable_pointcloud", false);
+
+    bool auto_connect = get_parameter("auto_connect").as_bool();
+    int camera_index = get_parameter("camera_index").as_int();
+    bool enable_depth = get_parameter("enable_depth").as_bool();
+    bool enable_pointcloud = get_parameter("enable_pointcloud").as_bool();
+
+    if (auto_connect) {
+        connectOnInit(camera_index, enable_depth, enable_pointcloud);
+    }
+
+#if 0
     // init services
-    mLastStateService = create_service<cubeeye_camera::srv::LastState>("~/get_last_state", 
+    mLastStateService = create_service<cubeeye_camera::srv::LastState>("~/get_last_state",
                             std::bind(&CubeEyeCameraNode::getLastStateServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
-    mLastErrorService = create_service<cubeeye_camera::srv::LastError>("~/get_last_error", 
+    mLastErrorService = create_service<cubeeye_camera::srv::LastError>("~/get_last_error",
                             std::bind(&CubeEyeCameraNode::getLastErrorServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
-    mScanService = create_service<cubeeye_camera::srv::Scan>("~/scan", 
+    mScanService = create_service<cubeeye_camera::srv::Scan>("~/scan",
                             std::bind(&CubeEyeCameraNode::getScanServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
-    mConnectService = create_service<cubeeye_camera::srv::Connect>("~/connect", 
+    mConnectService = create_service<cubeeye_camera::srv::Connect>("~/connect",
                             std::bind(&CubeEyeCameraNode::getConnectServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
-    mRunService = create_service<cubeeye_camera::srv::Run>("~/run", 
+    mRunService = create_service<cubeeye_camera::srv::Run>("~/run",
                             std::bind(&CubeEyeCameraNode::getRunServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
-    mStopService = create_service<cubeeye_camera::srv::Stop>("~/stop", 
+    mStopService = create_service<cubeeye_camera::srv::Stop>("~/stop",
                             std::bind(&CubeEyeCameraNode::getStopServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
-    mDisconnectService = create_service<cubeeye_camera::srv::Disconnect>("~/disconnect", 
+    mDisconnectService = create_service<cubeeye_camera::srv::Disconnect>("~/disconnect",
                             std::bind(&CubeEyeCameraNode::getDisconnectServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
+#endif
 }
 
+#if 0
 void CubeEyeCameraNode::getLastStateServiceCallback(
     const std::shared_ptr<cubeeye_camera::srv::LastState::Request> request,
     std::shared_ptr<cubeeye_camera::srv::LastState::Response>      response)
 {
     UNUSED(request);
     response->state = mCamera->getLastState();
-} 
+}
 
 void CubeEyeCameraNode::getLastErrorServiceCallback(
     const std::shared_ptr<cubeeye_camera::srv::LastError::Request> request,
@@ -65,7 +88,7 @@ void CubeEyeCameraNode::getLastErrorServiceCallback(
 {
     UNUSED(request);
     response->error = mCamera->getLastError();
-} 
+}
 
 void CubeEyeCameraNode::getScanServiceCallback(const std::shared_ptr<cubeeye_camera::srv::Scan::Request> request,
                                 std::shared_ptr<cubeeye_camera::srv::Scan::Response> response)
@@ -85,7 +108,7 @@ void CubeEyeCameraNode::getConnectServiceCallback(const std::shared_ptr<cubeeye_
         return;
     }
 
-    mCamera->connectTo(this);
+    mCamera->connectTo();
 }
 
 void CubeEyeCameraNode::getRunServiceCallback(const std::shared_ptr<cubeeye_camera::srv::Run::Request> request,
@@ -99,7 +122,7 @@ void CubeEyeCameraNode::getStopServiceCallback(const std::shared_ptr<cubeeye_cam
                                 std::shared_ptr<cubeeye_camera::srv::Stop::Response> response)
 {
     UNUSED(request);
-    RCLCPP_INFO(mLogger, "stop camera");    
+    RCLCPP_INFO(mLogger, "stop camera");
     response->result = mCamera->stop();
 }
 
@@ -114,8 +137,9 @@ void CubeEyeCameraNode::getDisconnectServiceCallback(const std::shared_ptr<cubee
         return;
     }
 
-    mCamera->disconnectFrom(this);
+    mCamera->disconnectFrom();
 }
+#endif
 
 bool CubeEyeCameraNode::shutdown()
 {
@@ -126,19 +150,34 @@ bool CubeEyeCameraNode::shutdown()
     return true;
 }
 
-int main(int argc, char **argv)
+void CubeEyeCameraNode::connectOnInit(int camera_index, bool enable_depth, bool enable_pointcloud)
 {
-    rclcpp::init(argc, argv);
-    auto node = std::make_shared<CubeEyeCameraNode>();
-    node->init();
+    std::vector<std::string> connections = mCamera->scan();
+    if (camera_index >= (int)connections.size()) {
+        RCLCPP_ERROR(mLogger, "camera with index %i not available", camera_index);
+        return;
+    }
 
-    RCLCPP_INFO(node->get_logger(), "cubeeye camera node started");
+    auto response = mCamera->connect(camera_index);
+    if (response != meere::sensor::result::success) {
+        RCLCPP_ERROR(mLogger, "camera connection failed.");
+        return;
+    }
+    mCamera->connectTo();
 
-    rclcpp::spin(node);
-    rclcpp::shutdown();
-
-    node->shutdown();
-    RCLCPP_INFO(node->get_logger(), "cubeeye camera node stopped");
-    return 0;
+    if (enable_depth) {
+        auto response = mCamera->run(6);
+        if (response != meere::sensor::result::success) {
+            RCLCPP_ERROR(mLogger, "Failed to run depth and amplitude");
+        }
+    }
+    if (enable_pointcloud) {
+        auto response = mCamera->run(32);
+        if (response != meere::sensor::result::success) {
+            RCLCPP_ERROR(mLogger, "Failed to run pointcloud");
+        }
+    }
 }
 
+#include "rclcpp_components/register_node_macro.hpp"
+RCLCPP_COMPONENTS_REGISTER_NODE(CubeEyeCameraNode)
