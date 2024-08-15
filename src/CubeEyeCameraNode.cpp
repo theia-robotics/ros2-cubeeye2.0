@@ -16,6 +16,7 @@
 #include <cv_bridge/cv_bridge.h>
 
 // service
+#if 0
 #include "cubeeye_camera/srv/last_state.hpp"
 #include "cubeeye_camera/srv/last_error.hpp"
 #include "cubeeye_camera/srv/scan.hpp"
@@ -23,14 +24,18 @@
 #include "cubeeye_camera/srv/run.hpp"
 #include "cubeeye_camera/srv/stop.hpp"
 #include "cubeeye_camera/srv/disconnect.hpp"
+#endif
 
 #include "ProjectDefines.h"
 #include "CameraModule.h"
 #include "CubeEyeCameraNode.h"
 
-CubeEyeCameraNode::CubeEyeCameraNode() : Node("cubeeye_camera_node"),
-    mLogger(rclcpp::get_logger("camera_node")), mCamera(std::make_shared<CameraModule>(this))
+CubeEyeCameraNode::CubeEyeCameraNode(const rclcpp::NodeOptions& options) :
+    Node("cubeeye_camera_node", options),
+    mLogger(rclcpp::get_logger("camera_node")),
+    mCamera(std::make_shared<CameraModule>(this))
 {
+  init();
 }
 
 void CubeEyeCameraNode::init()
@@ -49,6 +54,7 @@ void CubeEyeCameraNode::init()
         connectOnInit(camera_index, enable_depth, enable_pointcloud);
     }
 
+#if 0
     // init services
     mLastStateService = create_service<cubeeye_camera::srv::LastState>("~/get_last_state",
                             std::bind(&CubeEyeCameraNode::getLastStateServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
@@ -64,8 +70,10 @@ void CubeEyeCameraNode::init()
                             std::bind(&CubeEyeCameraNode::getStopServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
     mDisconnectService = create_service<cubeeye_camera::srv::Disconnect>("~/disconnect",
                             std::bind(&CubeEyeCameraNode::getDisconnectServiceCallback, this, std::placeholders::_1, std::placeholders::_2));
+#endif
 }
 
+#if 0
 void CubeEyeCameraNode::getLastStateServiceCallback(
     const std::shared_ptr<cubeeye_camera::srv::LastState::Request> request,
     std::shared_ptr<cubeeye_camera::srv::LastState::Response>      response)
@@ -131,6 +139,7 @@ void CubeEyeCameraNode::getDisconnectServiceCallback(const std::shared_ptr<cubee
 
     mCamera->disconnectFrom();
 }
+#endif
 
 bool CubeEyeCameraNode::shutdown()
 {
@@ -170,19 +179,5 @@ void CubeEyeCameraNode::connectOnInit(int camera_index, bool enable_depth, bool 
     }
 }
 
-int main(int argc, char **argv)
-{
-    rclcpp::init(argc, argv);
-    auto node = std::make_shared<CubeEyeCameraNode>();
-    node->init();
-
-    RCLCPP_INFO(node->get_logger(), "cubeeye camera node started");
-
-    rclcpp::spin(node);
-    rclcpp::shutdown();
-
-    node->shutdown();
-    RCLCPP_INFO(node->get_logger(), "cubeeye camera node stopped");
-    return 0;
-}
-
+#include "rclcpp_components/register_node_macro.hpp"
+RCLCPP_COMPONENTS_REGISTER_NODE(CubeEyeCameraNode)

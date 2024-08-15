@@ -314,10 +314,10 @@ void CameraModule::createPublishers()
 {
     auto _qos = rclcpp::QoS(rclcpp::SystemDefaultsQoS());
 
-    mDepthImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("/cubeeye/camera/depth", _qos);
-    mAmplitudeImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("/cubeeye/camera/amplitude", _qos);
-    mRGBImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("/cubeeye/camera/rgb", _qos);
-    mPointCloudPublisher = mNode->create_publisher<sensor_msgs::msg::PointCloud2>("/cubeeye/camera/points", _qos);
+    mDepthImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("depth", _qos);
+    mAmplitudeImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("amplitude", _qos);
+    mRGBImagePublisher = mNode->create_publisher<sensor_msgs::msg::Image>("color", _qos);
+    mPointCloudPublisher = mNode->create_publisher<sensor_msgs::msg::PointCloud2>("cloud", _qos);
 }
 
 sensor_msgs::msg::Image::SharedPtr CameraModule::createImageMessage(meere::sensor::FrameType type, int32_t width, int32_t height)
