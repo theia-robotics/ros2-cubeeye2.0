@@ -44,6 +44,7 @@ private:
 private:
     rclcpp::Node* mNode;
     std::string mFrameId;
+    int mDownsample;
 
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr mDepthImagePublisher;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr mAmplitudeImagePublisher;

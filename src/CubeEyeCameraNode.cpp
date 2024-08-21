@@ -158,24 +158,22 @@ void CubeEyeCameraNode::connectOnInit(int camera_index, bool enable_depth, bool 
         return;
     }
 
-    auto response = mCamera->connect(camera_index);
-    if (response != meere::sensor::result::success) {
+    if (mCamera->connect(camera_index) != meere::sensor::result::success) {
         RCLCPP_ERROR(mLogger, "camera connection failed.");
         return;
     }
     mCamera->connectTo();
 
+    int frames = 0;
+    frames |= meere::sensor::FrameType::RGB;
     if (enable_depth) {
-        auto response = mCamera->run(6);
-        if (response != meere::sensor::result::success) {
-            RCLCPP_ERROR(mLogger, "Failed to run depth and amplitude");
-        }
+        frames |= meere::sensor::FrameType::Depth;
     }
     if (enable_pointcloud) {
-        auto response = mCamera->run(32);
-        if (response != meere::sensor::result::success) {
-            RCLCPP_ERROR(mLogger, "Failed to run pointcloud");
-        }
+        frames |= meere::sensor::FrameType::PointCloud;
+    }
+    if (mCamera->run(frames) != meere::sensor::result::success) {
+        RCLCPP_ERROR(mLogger, "Failed to run camera");
     }
 }
 
