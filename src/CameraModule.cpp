@@ -170,7 +170,9 @@ void CameraModule::shutdown() {
 
 void CameraModule::connectTo() {
     mNode->declare_parameter("frame_id", "tof");
+    mNode->declare_parameter("downsample", 1);
     mFrameId = mNode->get_parameter("frame_id").as_string();
+    mDownsample = mNode->get_parameter("downsample").as_int();
 
     // initialize model
     RCLCPP_INFO(mNode->get_logger(), "make model parameter (%s)", mCamera->source()->name().c_str());
@@ -239,7 +241,7 @@ void CameraModule::publishFrames(const meere::sensor::sptr_frame_list& frames)
             || it->frameType() == meere::sensor::FrameType::RegisteredRGB) {
 
             auto _sptr_frame = meere::sensor::frame_cast_basic8u(it);
-			auto _ptr_frame_data = _sptr_frame->frameData();
+			      auto _ptr_frame_data = _sptr_frame->frameData();
 
             sensor_msgs::msg::Image::SharedPtr _msg = createImageMessage(it->frameType(),
                                                             _sptr_frame->frameWidth(), _sptr_frame->frameHeight());
@@ -263,19 +265,25 @@ void CameraModule::publishFrames(const meere::sensor::sptr_frame_list& frames)
                 auto _sptr_frame_dataY = _sptr_pointcloud_frame->frameDataY();
                 auto _sptr_frame_dataZ = _sptr_pointcloud_frame->frameDataZ();
 
-                sensor_msgs::msg::PointCloud2::SharedPtr _pcl_msg = createPointCloudMessage(meere::sensor::FrameType::PointCloud,
-                                                                _sptr_pointcloud_frame->frameWidth(), _sptr_pointcloud_frame->frameHeight());
+                sensor_msgs::msg::PointCloud2::SharedPtr _pcl_msg = createPointCloudMessage(
+                    meere::sensor::FrameType::PointCloud,
+                    _sptr_pointcloud_frame->frameWidth() / mDownsample,
+                    _sptr_pointcloud_frame->frameHeight() / mDownsample);
 
+                std::size_t _pcl_pos = 0;
                 float* _pcl_data = reinterpret_cast<float*>(&_pcl_msg->data[0]);
-                for (int y = 0 ; y < _sptr_pointcloud_frame->frameHeight(); y++) {
-                    for (int x = 0 ; x < _sptr_pointcloud_frame->frameWidth(); x++) {
+                for (int y = 0 ; y < _sptr_pointcloud_frame->frameHeight(); y+=mDownsample) {
+                    for (int x = 0 ; x < _sptr_pointcloud_frame->frameWidth(); x+=mDownsample) {
                         int _pos = y * _sptr_pointcloud_frame->frameWidth() + x;
-                        int _pcl_pos = _pos * 3;
 
                         // points
+                        if (sizeof(float) * (_pcl_pos + 3) > _pcl_msg->data.size()) {
+                            break;
+                        }
                         _pcl_data[_pcl_pos] = -(*_sptr_frame_dataY)[_pos];
                         _pcl_data[_pcl_pos + 1] = -(*_sptr_frame_dataX)[_pos];
                         _pcl_data[_pcl_pos + 2] = (*_sptr_frame_dataZ)[_pos];
+                        _pcl_pos += 3;
                     }
                 }
                 mPointCloudPublisher->publish(*_pcl_msg);
@@ -289,19 +297,25 @@ void CameraModule::publishFrames(const meere::sensor::sptr_frame_list& frames)
                 auto _sptr_frame_dataZ = _sptr_intensity_pointcloud_frame->frameDataZ();
                 // auto _sptr_frame_dataI = _sptr_intensity_pointcloud_frame->frameDataI();
 
-                sensor_msgs::msg::PointCloud2::SharedPtr _pcl_msg = createPointCloudMessage(meere::sensor::FrameType::PointCloud,
-                                                                _sptr_intensity_pointcloud_frame->frameWidth(), _sptr_intensity_pointcloud_frame->frameHeight());
+                sensor_msgs::msg::PointCloud2::SharedPtr _pcl_msg = createPointCloudMessage(
+                    meere::sensor::FrameType::PointCloud,
+                    _sptr_intensity_pointcloud_frame->frameWidth() / mDownsample,
+                    _sptr_intensity_pointcloud_frame->frameHeight() / mDownsample);
 
+                std::size_t _pcl_pos = 0;
                 float* _pcl_data = reinterpret_cast<float*>(&_pcl_msg->data[0]);
-                for (int y = 0 ; y < _sptr_intensity_pointcloud_frame->frameHeight(); y++) {
-                    for (int x = 0 ; x < _sptr_intensity_pointcloud_frame->frameWidth(); x++) {
+                for (int y = 0 ; y < _sptr_intensity_pointcloud_frame->frameHeight(); y+=mDownsample) {
+                    for (int x = 0 ; x < _sptr_intensity_pointcloud_frame->frameWidth(); x+=mDownsample) {
                         int _pos = y * _sptr_intensity_pointcloud_frame->frameWidth() + x;
-                        int _pcl_pos = _pos * 3;
 
                         // points
+                        if (sizeof(float) * (_pcl_pos + 3) > _pcl_msg->data.size()) {
+                            break;
+                        }
                         _pcl_data[_pcl_pos] = -(*_sptr_frame_dataY)[_pos];
                         _pcl_data[_pcl_pos + 1] = -(*_sptr_frame_dataX)[_pos];
                         _pcl_data[_pcl_pos + 2] = (*_sptr_frame_dataZ)[_pos];
+                        _pcl_pos += 3;
                     }
                 }
                 mPointCloudPublisher->publish(*_pcl_msg);
